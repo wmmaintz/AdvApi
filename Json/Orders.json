@@ -1,0 +1,19 @@
+[
+
+  {
+    "Id": 1,
+    "Total": 100,
+    "Placed": "2020-01-01T18:00:00",
+    "Completed": "1900-01-01T00:00:00",
+    "Status": "Open",
+    "CustomerEmail": "Customer1@Email.com"
+  },
+  {
+    "Id": 2,
+    "Total": 200,
+    "Placed": "2020-02-02T15:00:00",
+    "Completed": "2020-03-03T16:00:00",
+    "Status": "Complete",
+    "CustomerEmail": "Customer2@Email.com"
+  }
+]

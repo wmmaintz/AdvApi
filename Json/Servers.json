@@ -1,0 +1,38 @@
+[
+  {
+    "Name": "DEV-SrvrWeb",
+    "IsOnLine": true
+  },
+  {
+    "Name": "DEV-SrvrApp",
+    "IsOnLine": true
+  },
+  {
+    "Name": "DEV-SrvrRdb",
+    "IsOnLine": true
+  },
+  {
+    "Name": "QA-SrvrWeb",
+    "IsOnLine": true
+  },
+  {
+    "Name": "QA-SrvrApp",
+    "IsOnLine": true
+  },
+  {
+    "Name": "QA-SrvrRdb",
+    "IsOnLine": true
+  },
+  {
+    "Name": "PROD-SrvrWeb",
+    "IsOnLine": false
+  },
+  {
+    "Name": "PROD-SrvrApp",
+    "IsOnLine": false
+  },
+  {
+    "Name": "PROD-SrvrRdb",
+    "IsOnLine": false
+  }
+]
