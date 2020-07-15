@@ -47,7 +47,9 @@ namespace AdvApi.Controllers
         [HttpGet("{email}")]
         public async Task<ActionResult<Customer>> GetCustomer(string email)
         {
-            var customer = await _context.Customers.FindAsync(email.ToLower());
+            Customer customer = await _context.Customers
+                // .Where(c => EF.Functions.Collate(c.Email, "SQL_Latin1_Generatl_CP1_CS_AS"))
+                .FindAsync(email.ToLower());
 
             if (customer == null)
             {
@@ -82,7 +84,7 @@ namespace AdvApi.Controllers
                 return BadRequest();
             }
 
-            Customer newCustomer = await _context.Customers.FindAsync(customer.Email);
+            Customer newCustomer = await _context.Customers.FindAsync(customer.Email.ToLower());
             if (customer.Email == null) { return NotFound(); }
             if (customer.Name != null) { newCustomer.Name = customer.Name; }
             if (customer.State != null) { newCustomer.State = customer.State; }
@@ -127,7 +129,7 @@ namespace AdvApi.Controllers
                 return BadRequest();
             }
             Customer newCustomer = new Customer();
-            newCustomer.Email = customer.Email;
+            newCustomer.Email = customer.Email.ToLower();
             newCustomer.Name = customer.Name;
             newCustomer.State = customer.State;
             newCustomer.Orders = customer.Orders;
@@ -171,7 +173,7 @@ namespace AdvApi.Controllers
 
         private bool CustomerExists(string email)
         {
-            return _context.Customers.Any(e => e.Email == email);
+            return _context.Customers.Any(e => e.Email == email.ToLower());
         }
     }
 }
