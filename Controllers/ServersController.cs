@@ -7,6 +7,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Entities;
 using AdvApi.Data;
+using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore.SqlServer.Migrations.Internal;
+using Entities.Repositories;
 
 namespace AdvApi.Controllers
 {
@@ -14,11 +17,17 @@ namespace AdvApi.Controllers
     [ApiController]
     public class ServersController : ControllerBase
     {
-        private readonly ApiContext _context;
+        private readonly ApiContext _ctx;
+        private readonly ILogger<CustomersController> _logger;
+        private readonly ServerRepository _repo;
 
-        public ServersController(ApiContext context)
+        public ServersController(DbContextOptions<ApiContext> options, ILogger<CustomersController> logger)
         {
-            _context = context;
+            ApiContext ctx = new ApiContext(options);
+            ServerRepository repo = new ServerRepository(ctx);
+            _ctx = ctx;
+            _logger = logger;
+            _repo = repo;
         }
 
         /* Server model
@@ -34,7 +43,7 @@ namespace AdvApi.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Server>>> GetServers()
         {
-            IList<Server> servers = await _context.Servers.ToListAsync();
+            IList<Server> servers = await _ctx.Servers.ToListAsync();
             return Ok(servers.OrderBy(i => i.Name));
         }
 
@@ -46,7 +55,7 @@ namespace AdvApi.Controllers
         [HttpGet("{name}")]
         public async Task<ActionResult<Server>> GetServer(string name)
         {
-            var server = await _context.Servers.FindAsync(name);
+            var server = await _ctx.Servers.FindAsync(name);
 
             if (server == null)
             {
@@ -81,11 +90,11 @@ namespace AdvApi.Controllers
                 return BadRequest();
             }
 
-            _context.Entry(server).State = EntityState.Modified;
+            _ctx.Entry(server).State = EntityState.Modified;
 
             try
             {
-                await _context.SaveChangesAsync();
+                await _ctx.SaveChangesAsync();
             }
             catch (DbUpdateConcurrencyException)
             {
@@ -113,8 +122,8 @@ namespace AdvApi.Controllers
                 return BadRequest("Server name not provided.");
             }
 
-            _context.Servers.Add(server);
-            await _context.SaveChangesAsync();
+            _ctx.Servers.Add(server);
+            await _ctx.SaveChangesAsync();
 
             return CreatedAtAction("GetServer", new { name = server.Name }, server);
         }
@@ -127,21 +136,21 @@ namespace AdvApi.Controllers
         [HttpDelete("{name}")]
         public async Task<ActionResult<Server>> DeleteServer(string name)
         {
-            var server = await _context.Servers.FindAsync(name);
+            var server = await _ctx.Servers.FindAsync(name);
             if (server == null)
             {
                 return NotFound();
             }
 
-            _context.Servers.Remove(server);
-            await _context.SaveChangesAsync();
+            _ctx.Servers.Remove(server);
+            await _ctx.SaveChangesAsync();
 
             return Ok(server);
         }
 
         private bool ServerExists(string name)
         {
-            return _context.Servers.Any(e => e.Name == name);
+            return _ctx.Servers.Any(e => e.Name == name);
         }
     }
 }

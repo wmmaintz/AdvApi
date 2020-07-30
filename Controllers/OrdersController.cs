@@ -1,10 +1,13 @@
 ﻿using Entities;
+using Entities.Repositories;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using static Entities.Repositories.OrderRepository;
 
 namespace AdvApi.Controllers
 {
@@ -12,159 +15,129 @@ namespace AdvApi.Controllers
     [ApiController]
     public class OrdersController : ControllerBase
     {
-        private readonly ApiContext _context;
+        private readonly ApiContext _ctx;
+        private readonly ILogger<CustomersController> _logger;
+        private readonly OrderRepository _repo;
 
-        public OrdersController(ApiContext context)
+        public OrdersController(DbContextOptions<ApiContext> options, ILogger<CustomersController> logger)
         {
-            _context = context;
+            ApiContext ctx = new ApiContext(options);
+            OrderRepository repo = new OrderRepository(ctx);
+            _ctx = ctx;
+            _logger = logger;
+            _repo = repo;
         }
-
-        /* Order model
-         * ===================
-         * Id
-         * Customer
-         * Total
-         * Placed
-         * Completed
-         * Status
-         */
 
         // GET: api/orders
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Order>>> GetOrders()
         {
-            return await _context.Orders
-                .Include(c => c.Customer)
-                .ToListAsync();
 
+            IEnumerable<Order> orders = await _repo.GetAllOrdersAsync();
+            if (orders == null)
+            {
+                return NotFound();
+            }
+            return Ok(orders);
         }
 
         // GET: api/orders/5
         [HttpGet("{id}")]
         public async Task<ActionResult<Order>> GetOrder(int id)
         {
-            var order = await _context.Orders.FindAsync(id);
+            if (id == 0)
+            {
+                return BadRequest("ERROR: Order ID is invalid");
+            }
+
+            Order order = await _ctx.Orders.FindAsync(id);
 
             if (order == null)
             {
                 return NotFound();
             }
-
-            return order;
+            return Ok(order);
         }
 
-        // PUT: api/orders/5
-        // To protect from overposting attacks, enable the specific properties you want to bind to, for
-        // more details, see https://go.microsoft.com/fwlink/?linkid=2123754.
-        [HttpPut("{id}")]
-        public async Task<IActionResult> PutOrder(int id, [FromBody] Order order)
+        // PUT: api/orders
+        [HttpPut]
+        public async Task<ActionResult<OrderResponse>> UpdateOrder([FromBody] Order chgdOrder)
         {
-            if (id != order.Id)
+            if (chgdOrder.Id == 0)
             {
-                return BadRequest();
+                return BadRequest("ERROR: Order ID is invalid");
             }
 
-            // Validate that the order exists
-            Order order2Validate = await _context.Orders.FindAsync(id);
-            if (order2Validate == null) { return BadRequest("ERROR: Order does not exist!"); }
-            // var customer = await _context.Customers.FindAsync(order.Customer.Email);
-            // if (customer == null) { return BadRequest("ERROR: Customer does not exist!"); }
+            OrderResponse or = await _repo.UpdateOrderAsync(chgdOrder);
 
-            // Order and customer exist - proceed
-
-            try
+            if (or.OrResult == null)
             {
-                await _context.SaveChangesAsync();
+                return Ok(or.OrOrder);
             }
-            catch (DbUpdateConcurrencyException)
+            return or.OrResult.Substring(0, 7) switch
             {
-                if (!OrderExists(id))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
-            }
-
-            return Ok("Order ID#" + order.Id + " updated.");
+                "NullEma" => BadRequest("Invalid order id"),
+                "NotFoun" => Problem("ERROR: Order not found"),
+                _ => Problem(or.OrResult)
+            };
         }
 
         // POST: api/orders
-        // To protect from overposting attacks, enable the specific properties you want to bind to, for
-        // more details, see https://go.microsoft.com/fwlink/?linkid=2123754.
         [HttpPost]
-        public async Task<ActionResult<Order>> PostOrder(Order order)
+        public async Task<ActionResult<OrderResponse>> CreateOrder([FromBody] Order newOrder)
         {
-            Order newOrder = new Order();
-            newOrder.Id = order.Id;
-            newOrder.Total = order.Total;
-            newOrder.Placed = order.Placed;
-            newOrder.Completed = order.Completed;
-            newOrder.Status = order.Status;
-            newOrder.Customer = order.Customer;
-            newOrder.CustomerEmail = order.CustomerEmail;
-            var customer = await _context.Customers.FindAsync(order.Customer.Email);
-            if (customer == null) { return BadRequest("ERROR: Customer does not exist!"); }
-            newOrder.Customer = customer;
-            order = newOrder;
-
-            try
+            if (newOrder.Id == 0)
             {
-                _context.Orders.Add(order);
-                // or
-                // _context.Entry(order).State = EntityState.Added;
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!OrderExists(order.Id))
-                {
-                    return Problem("ERROR: Order not created.");
-                }
-                else
-                {
-                    return Problem("ERROR: Database not updated.");
-                }
+                return BadRequest("ERROR: Order ID is invalid");
             }
 
-            return CreatedAtAction("GetOrder", new { id = order.Id }, order);
+            // To protect from overposting attacks, enable the specific properties you want to bind to, for
+            // more details, see https://go.microsoft.com/fwlink/?linkid=2123754.
+            Order order = new Order {
+                Id = newOrder.Id,
+                Total = newOrder.Total,
+                Placed = newOrder.Placed,
+                Completed = newOrder.Completed,
+                Status = newOrder.Status,
+                CustomerEmail = newOrder.CustomerEmail
+            };
+
+            OrderResponse or = await _repo.CreateOrderAsync(newOrder);
+
+            if (or.OrResult == null)
+            {
+                return Ok(or.OrOrder);
+                // _ => Ok(CreatedAtAction("GetOrder", new { id = order.Id }, order));
+            }
+            return or.OrResult.Substring(0, 7) switch
+            {
+                "NullEma" => BadRequest("Invalid customer email"),
+                "Custome" => Problem("ERROR: Customer existed before insertion"),
+                _ => Problem(or.OrResult)
+            };
         }
 
         // DELETE: api/orders/5
         [HttpDelete("{id}")]
-        public async Task<ActionResult> DeleteOrder(int id)
+        public async Task<ActionResult<Order>> DeleteOrder(int id)
         {
-            var order = await _context.Orders.FindAsync(id);
-            if (order == null)
+            if (id == 0)
             {
-                return NotFound();
+                return BadRequest("ERROR: Order ID is invalid");
             }
 
-            try
-            {
-                _context.Orders.Remove(order);
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!OrderExists(id))
-                {
-                    return Problem("ERROR: Database not updated.");
-                }
-                else
-                {
-                    return Problem("ERROR: Order not deleted.");
-                }
-            }
+            OrderResponse or = await _repo.DeleteOrderAsync(id);
 
-            return Ok("Order ID#" + order.Id + " deleted.");
+            if (or.OrResult == null)
+            {
+                return Ok(or.OrOrder);
+            }
+            return or.OrResult.Substring(0, 7) switch
+            {
+                "NullEma" => BadRequest("Invalid customer email"),
+                _ => Problem(or.OrResult)
+            };
         }
 
-        private bool OrderExists(int id)
-        {
-            return _context.Orders.Any(e => e.Id == id);
-        }
     }
 }

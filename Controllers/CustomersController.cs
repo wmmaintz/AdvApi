@@ -1,42 +1,85 @@
 ﻿using Entities;
+using Entities.Repositories;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using System;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Linq;
 using System.Threading.Tasks;
+using static Entities.Configuration.Utils;
+using static Entities.Repositories.CustomerRepository;
 
 namespace AdvApi.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    //[Authorize]
     public class CustomersController : ControllerBase
     {
-        private readonly ApiContext _context;
+        private readonly ApiContext _ctx;
+        //private readonly ILogger<CustomersController> _logger;
+        private readonly CustomerRepository _repo;
 
-        public CustomersController(ApiContext context)
+        public CustomersController(DbContextOptions<ApiContext> options, ILogger<CustomersController> logger)
         {
-            _context = context;
+            ApiContext ctx = new ApiContext(options);
+            CustomerRepository repo = new CustomerRepository(ctx);
+            _ctx = ctx;
+            _repo = repo;
+            //_logger = logger;
         }
-
-        /* Customer model
-         * ===============
-         * customer.Id 
-         * customer.Email 
-         * customer.Name  
-         * customer.State 
-         * customer.Orders
-         */
 
         /// <summary>
         /// GET: api/customers
         /// </summary>
         /// <returns>List of Customer Objects</returns>
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Customer>>> GetCustomers()
+        public async Task<ActionResult<IEnumerable<Customer>>> Get()
         {
-            IList<Customer> customers = await _context.Customers.ToListAsync();
-            return Ok(customers.OrderBy(c => c.Name));
+            IEnumerable<Customer> customers = await _repo.GetAllCustomersAsync();
+            if (customers == null)
+            {
+                return NotFound();
+            }
+            return Ok(customers);
+        }
+
+        /// <summary>
+        /// GET: api/customers/orders
+        /// </summary>
+        /// <returns>List of Customer Objects</returns>
+        [HttpGet("orders")]
+        public async Task<ActionResult<IEnumerable<Customer>>> GetCustomersWOrders()
+        {
+            IEnumerable<Customer> customers = await _repo.GetCustomersWOrdersAsync();
+            if (customers == null)
+            {
+                return NotFound();
+            }
+            return Ok(customers);
+        }
+
+
+        /// <summary>
+        /// GET: api/customers/orders
+        /// </summary>
+        /// <returns>List of Customer Objects</returns>
+        [HttpGet("name/{name}")]
+        public async Task<ActionResult<IEnumerable<Customer>>> GetCustomersByName(string name)
+        {
+            if (name == null)
+            {
+                return BadRequest("ERROR: A customer name was not provided");
+            }
+            IEnumerable<Customer> customers = await _repo.GetCustomersByNameAsync(name);
+            if (customers == null)
+            {
+                return NotFound("A customer similar to " + name + " was not found");
+            }
+            return Ok(customers);
         }
 
         /// <summary>
@@ -45,18 +88,19 @@ namespace AdvApi.Controllers
         /// <param name="email"></param>
         /// <returns>Customer Object</returns>
         [HttpGet("{email}")]
-        public async Task<ActionResult<Customer>> GetCustomer(string email)
+        public async Task<ActionResult<Customer>> GetCustomerByEmail(string email)
         {
-            Customer customer = await _context.Customers
-                // .Where(c => EF.Functions.Collate(c.Email, "SQL_Latin1_Generatl_CP1_CS_AS"))
-                .FindAsync(email.ToLower());
+            if (email == null)
+            {
+                return BadRequest("ERROR: Customer email is invalid");
+            }
+            Customer customer = await _repo.GetCustomerByEmailAsync(email);
 
             if (customer == null)
             {
                 return NotFound();
             }
-
-            return customer;
+            return Ok(customer);
         }
 
         /// <summary>
@@ -69,49 +113,27 @@ namespace AdvApi.Controllers
         /// <param name="email"></param>
         /// <param name="customer"></param>
         /// <returns>Customer Object</returns>
-        [HttpPut("{email}")]
-        public async Task<IActionResult> PutCustomer([FromBody] Customer customer)
+        [HttpPut]
+        public async Task<ActionResult<Customer>> UpdateCustomer([FromBody] Customer chgdCustomer)
         {
-            if (   (customer.Email == null)
-                || (
-                    (customer.Email != null)
-                 && (customer.Name  == null)
-                 && (customer.State == null)
-                 && (customer.Orders == null)
-                   )
-            )
+            if (chgdCustomer.Email == null)
             {
-                return BadRequest();
+                return BadRequest("ERROR: Customer email is invalid");
             }
 
-            Customer newCustomer = await _context.Customers.FindAsync(customer.Email.ToLower());
-            if (customer.Email == null) { return NotFound(); }
-            if (customer.Name != null) { newCustomer.Name = customer.Name; }
-            if (customer.State != null) { newCustomer.State = customer.State; }
-            if (customer.Orders != null) { newCustomer.Orders = customer.Orders; }
-            customer = newCustomer;
+            CustomerResponse cr = await _repo.UpdateCustomerAsync(chgdCustomer);
 
-            _context.Entry(customer).State = EntityState.Modified;
-
-            try
+            if (cr.CrResult == null)
             {
-                await _context.SaveChangesAsync();
+                return Ok(cr.CrCustomer);
             }
-            catch (DbUpdateConcurrencyException)
+            return cr.CrResult.Substring(0, 7) switch
             {
-                if (!CustomerExists(customer.Email))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
-            }
-
-            return Ok(customer);
+                "NullEma" => BadRequest("Invalid customer email"),
+                "NotFoun" => Problem("ERROR: Customer not found"),
+                _ => Problem(cr.CrResult)
+            };
         }
-
 
         /// <summary>
         /// POST: api/customers
@@ -122,21 +144,26 @@ namespace AdvApi.Controllers
         /// <param name="customer"></param>
         /// <returns></returns>
         [HttpPost]
-        public async Task<ActionResult<Customer>> PostCustomer(Customer customer)
+        public async Task<ActionResult<Customer>> CreateCustomer(Customer newCustomer)
         {
-            if ( customer.Email == null)
+            if (newCustomer.Email == null)
             {
-                return BadRequest();
+                return BadRequest("ERROR: Customer email is invalid");
             }
-            Customer newCustomer = new Customer();
-            newCustomer.Email = customer.Email.ToLower();
-            newCustomer.Name = customer.Name;
-            newCustomer.State = customer.State;
-            newCustomer.Orders = customer.Orders;
-            _context.Customers.Add(newCustomer);
-            await _context.SaveChangesAsync();
 
-            return CreatedAtAction("GetCustomer", new { email = newCustomer.Email }, newCustomer);
+            CustomerResponse cr = await _repo.CreateCustomerAsync(newCustomer);
+
+            if (cr.CrResult == null)
+            {
+                return Ok(cr.CrCustomer);
+                // _ => Ok(CreatedAtAction("GetCustomer", new { email = customer.Email }, customer)),
+            }
+            return cr.CrResult.Substring(0,7) switch
+            {
+                "NullEma" => BadRequest("Invalid customer email"),
+                "Custome" => Problem("ERROR: Customer existed before insertion"),
+                _ => Problem(cr.CrResult)
+            };
         }
 
         /// <summary>
@@ -150,30 +177,21 @@ namespace AdvApi.Controllers
         {
             if (email == null)
             {
-                return BadRequest();
-            }
-            var customer = new Customer { Email = email };
-            try
-            {
-                _context.Customers.Attach(customer);
-                if (customer.Orders != null)
-                {
-                    return BadRequest("Customer has order records on file.");
-                }
-                _context.Customers.Remove(customer);
-                await _context.SaveChangesAsync();
-            }
-            catch (DbException)
-            {
-                return NotFound();
+                return BadRequest("ERROR: Customer Email is invalid");
             }
 
-            return Ok();
+            CustomerResponse cr = await _repo.DeleteCustomerAsync(email);
+
+            if (cr.CrResult == null)
+            {
+                return Ok(cr.CrCustomer);
+            }
+            return cr.CrResult.Substring(0, 7) switch
+            {
+                "NullEma" => BadRequest("Invalid customer email"),
+                _ => Problem(cr.CrResult)
+            };
         }
 
-        private bool CustomerExists(string email)
-        {
-            return _context.Customers.Any(e => e.Email == email.ToLower());
-        }
     }
 }

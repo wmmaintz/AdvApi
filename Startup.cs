@@ -47,7 +47,6 @@ namespace AdvApi
             if (dbType == "LITE")
             {
                 // connect to sql lite database
-                // services.AddDbContext<ApiContext>();
                 services.AddDbContext<ApiContext>(options =>
                     options.UseSqlite(connectionString,
                     options => options.MigrationsAssembly("AdvApi")));
@@ -55,7 +54,6 @@ namespace AdvApi
             else
             {
                 // connect to sql server database
-                // services.AddDbContext<ApiContext>();
                 services.AddDbContext<ApiContext>(opts =>
                     opts.UseSqlServer(connectionString,
                     options => options.MigrationsAssembly("AdvApi")));

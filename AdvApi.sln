@@ -5,7 +5,7 @@ VisualStudioVersion = 16.0.30128.74
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "AdvApi", "AdvApi.csproj", "{DC3E5B06-2350-425A-9817-FA3FA4EB004C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Entities", "..\Entities\Entities.csproj", "{EF5AE31B-32DE-4973-905F-7A434210958A}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Entities", "..\Entities\Entities.csproj", "{EF5AE31B-32DE-4973-905F-7A434210958A}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
