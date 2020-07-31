@@ -20,7 +20,7 @@ namespace AdvApi.Controllers
     public class CustomersController : ControllerBase
     {
         private readonly ApiContext _ctx;
-        //private readonly ILogger<CustomersController> _logger;
+        private readonly ILogger<CustomersController> _logger;
         private readonly CustomerRepository _repo;
 
         public CustomersController(DbContextOptions<ApiContext> options, ILogger<CustomersController> logger)
@@ -29,7 +29,7 @@ namespace AdvApi.Controllers
             CustomerRepository repo = new CustomerRepository(ctx);
             _ctx = ctx;
             _repo = repo;
-            //_logger = logger;
+            _logger = logger;
         }
 
         /// <summary>
@@ -158,10 +158,10 @@ namespace AdvApi.Controllers
                 return Ok(cr.CrCustomer);
                 // _ => Ok(CreatedAtAction("GetCustomer", new { email = customer.Email }, customer)),
             }
-            return cr.CrResult.Substring(0,7) switch
+            return cr.CrResult.Substring(0,6) switch
             {
-                "NullEma" => BadRequest("Invalid customer email"),
-                "Custome" => Problem("ERROR: Customer existed before insertion"),
+                "NullId" => BadRequest("Invalid customer email"),
+                "Custom" => Problem("ERROR: Customer existed before insertion"),
                 _ => Problem(cr.CrResult)
             };
         }
@@ -184,11 +184,12 @@ namespace AdvApi.Controllers
 
             if (cr.CrResult == null)
             {
-                return Ok(cr.CrCustomer);
+                return Ok();
             }
-            return cr.CrResult.Substring(0, 7) switch
+            return cr.CrResult.Substring(0, 6) switch
             {
-                "NullEma" => BadRequest("Invalid customer email"),
+                "NullId" => BadRequest("Invalid customer email"),
+                "NotFou" => Problem("ERROR: Customer email not found"),
                 _ => Problem(cr.CrResult)
             };
         }

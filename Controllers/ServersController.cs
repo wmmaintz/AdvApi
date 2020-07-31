@@ -10,6 +10,7 @@ using AdvApi.Data;
 using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore.SqlServer.Migrations.Internal;
 using Entities.Repositories;
+using static Entities.Repositories.ServerRepository;
 
 namespace AdvApi.Controllers
 {
@@ -18,10 +19,10 @@ namespace AdvApi.Controllers
     public class ServersController : ControllerBase
     {
         private readonly ApiContext _ctx;
-        private readonly ILogger<CustomersController> _logger;
+        private readonly ILogger<ServersController> _logger;
         private readonly ServerRepository _repo;
 
-        public ServersController(DbContextOptions<ApiContext> options, ILogger<CustomersController> logger)
+        public ServersController(DbContextOptions<ApiContext> options, ILogger<ServersController> logger)
         {
             ApiContext ctx = new ApiContext(options);
             ServerRepository repo = new ServerRepository(ctx);
@@ -30,122 +31,140 @@ namespace AdvApi.Controllers
             _repo = repo;
         }
 
-        /* Server model
-         * =============
-         * Name
-         * IsOnLine
-         */
-
         /// <summary>
         /// GET: api/servers
         /// </summary>
-        /// <returns>List of Server Objects</returns>
+        /// <returns>List of Servers</returns>
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Server>>> GetServers()
         {
-            IList<Server> servers = await _ctx.Servers.ToListAsync();
-            return Ok(servers.OrderBy(i => i.Name));
+            IEnumerable<Server> servers = await _repo.GetAllServersAsync();
+            if (servers == null)
+            {
+                return NotFound();
+            }
+            return Ok(servers);
+        }
+
+        /// <summary>
+        /// GET: api/servers/name/QA
+        /// </summary>
+        /// <param name="name"></param>
+        /// <returns>servers</returns>
+        [HttpGet("name/{name}")]
+        public async Task<ActionResult<Server>> GetServersWithNameLike(string name)
+        {
+            if (name == null)
+            {
+                return BadRequest("ERROR: A customer name was not provided");
+            }
+            IEnumerable<Server> servers = await _repo.GetServersByNameAsync(name);
+            if (servers == null)
+            {
+                return NotFound("A server similar to " + name + " was not found");
+            }
+            return Ok(servers);
         }
 
         /// <summary>
         /// GET: api/servers/QA-App
         /// </summary>
         /// <param name="name"></param>
-        /// <returns>Server Object</returns>
+        /// <returns>server</returns>
         [HttpGet("{name}")]
         public async Task<ActionResult<Server>> GetServer(string name)
         {
-            var server = await _ctx.Servers.FindAsync(name);
-
+            if (name == null)
+            {
+                return BadRequest("ERROR: A customer name was not provided");
+            }
+            Server server = await _repo.GetServerAsync(name);
             if (server == null)
             {
-                return NotFound();
+                return NotFound("A server, named " + name + ", was not found");
             }
-
-            return server;
+            return Ok(server);
         }
 
         /// <summary>
-        /// PUT: api/servers/oldServerName
+        /// PUT: api/servers
         /// </summary>
         /// <param name="name">OldServerName</param>
-        /// <param name="server">Server model with changed values</param>
-        /// <returns>Updated Server Object</returns>
+        /// <returns>server</returns>
         /// see https://go.microsoft.com/fwlink/?linkid=2123754.
-        [HttpPut("{name}")]
-        public async Task<IActionResult> PutServer(string name, [FromBody] Server server)
+        [HttpPut]
+        public async Task<IActionResult> UpdateServer([FromBody] Server chgdServer)
         {
-            if (
-                   (server.Name == name)
-                && (server.IsOnLine != true)
-                && (server.IsOnLine != false)
-            )
+            if (chgdServer.Name == null)
             {
-                return BadRequest();
+                return BadRequest("ERROR: Server name is invalid");
             }
 
-            server.Name = name;
-            if (name != server.Name)
-            {
-                return BadRequest();
-            }
+            ServerResponse sr = await _repo.UpdateServerAsync(chgdServer);
 
-            _ctx.Entry(server).State = EntityState.Modified;
-
-            try
+            if (sr.SrResult == null)
             {
-                await _ctx.SaveChangesAsync();
+                return Ok(sr.SrServer);
             }
-            catch (DbUpdateConcurrencyException)
+            return sr.SrResult.Substring(0, 6) switch
             {
-                if (!ServerExists(name))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
-            }
-
-            return Ok(server);
+                "NullId" => BadRequest("Invalid server name"),
+                "NotFou" => Problem("ERROR: Server not found"),
+                _ => Problem(sr.SrResult)
+            };
         }
 
         // POST: api/servers
         // To protect from overposting attacks, enable the specific properties you want to bind to, for
         // more details, see https://go.microsoft.com/fwlink/?linkid=2123754.
         [HttpPost]
-        public async Task<ActionResult<Server>> PostServer(Server server)
+        public async Task<ActionResult<Server>> PostServer(Server newServer)
         {
-            if ( server.Name == null )
+            if (newServer.Name == null )
             {
                 return BadRequest("Server name not provided.");
             }
 
-            _ctx.Servers.Add(server);
-            await _ctx.SaveChangesAsync();
+            ServerResponse sr = await _repo.CreateServerAsync(newServer);
 
-            return CreatedAtAction("GetServer", new { name = server.Name }, server);
+            if (sr.SrResult == null)
+            {
+                return Ok(sr.SrServer);
+                // return CreatedAtAction("GetServer", new { name = server.Name }, server);
+            }
+            return sr.SrResult.Substring(0, 6) switch
+            {
+                "NullId" => BadRequest("Invalid customer email"),
+                "Exists" => Problem("ERROR: Customer existed before insertion"),
+                _ => Problem(sr.SrResult)
+            };
         }
 
         /// <summary>
-        /// DELETE: api/servers/oldServerName
+        /// DELETE: api/servers/serverName
         /// </summary>
         /// <param name="name"></param>
-        /// <returns>Deleted Server Object</returns>
+        /// <returns>server</returns>
         [HttpDelete("{name}")]
         public async Task<ActionResult<Server>> DeleteServer(string name)
         {
-            var server = await _ctx.Servers.FindAsync(name);
-            if (server == null)
+            if (name == null)
             {
-                return NotFound();
+                return BadRequest("Server name not provided.");
             }
 
-            _ctx.Servers.Remove(server);
-            await _ctx.SaveChangesAsync();
+            ServerResponse sr = await _repo.DeleteServerAsync(name);
 
-            return Ok(server);
+            if (sr.SrResult == null)
+            {
+                return Ok();
+            }
+            return sr.SrResult.Substring(0, 6) switch
+            {
+                "NullId" => BadRequest("Invalid customer email"),
+                "NotFou" => Problem("ERROR: Server name not found"),
+                _ => Problem(sr.SrResult)
+            };
         }
 
         private bool ServerExists(string name)

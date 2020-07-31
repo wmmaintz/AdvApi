@@ -32,8 +32,27 @@ namespace AdvApi.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Order>>> GetOrders()
         {
-
             IEnumerable<Order> orders = await _repo.GetAllOrdersAsync();
+
+            if (orders == null)
+            {
+                return NotFound();
+            }
+            return Ok(orders);
+        }
+
+
+        // GET: api/orders/status/open or closed
+        [HttpGet("status/{status}")]
+        public async Task<ActionResult<IEnumerable<Order>>> GetOrdersByStatus(string status)
+        {
+            if (status == null)
+            {
+                return BadRequest("ERROR: Order status is blank");
+            }
+
+            IEnumerable<Order> orders = await _repo.GetOrdersByStatusAsync(status);
+
             if (orders == null)
             {
                 return NotFound();
@@ -74,10 +93,10 @@ namespace AdvApi.Controllers
             {
                 return Ok(or.OrOrder);
             }
-            return or.OrResult.Substring(0, 7) switch
+            return or.OrResult.Substring(0, 6) switch
             {
-                "NullEma" => BadRequest("Invalid order id"),
-                "NotFoun" => Problem("ERROR: Order not found"),
+                "NullId" => BadRequest("Invalid order id"),
+                "NotFou" => Problem("ERROR: Order not found"),
                 _ => Problem(or.OrResult)
             };
         }
@@ -94,7 +113,6 @@ namespace AdvApi.Controllers
             // To protect from overposting attacks, enable the specific properties you want to bind to, for
             // more details, see https://go.microsoft.com/fwlink/?linkid=2123754.
             Order order = new Order {
-                Id = newOrder.Id,
                 Total = newOrder.Total,
                 Placed = newOrder.Placed,
                 Completed = newOrder.Completed,
@@ -106,13 +124,13 @@ namespace AdvApi.Controllers
 
             if (or.OrResult == null)
             {
-                return Ok(or.OrOrder);
-                // _ => Ok(CreatedAtAction("GetOrder", new { id = order.Id }, order));
+                // return Ok(or.OrOrder);
+                return Ok(CreatedAtAction("GetOrder", new { id = order.Id }, or.OrOrder));
             }
-            return or.OrResult.Substring(0, 7) switch
+            return or.OrResult.Substring(0, 6) switch
             {
-                "NullEma" => BadRequest("Invalid customer email"),
-                "Custome" => Problem("ERROR: Customer existed before insertion"),
+                "NullId" => BadRequest("Invalid order Id"),
+                "Exists" => Problem("ERROR: Order existed before insertion"),
                 _ => Problem(or.OrResult)
             };
         }
